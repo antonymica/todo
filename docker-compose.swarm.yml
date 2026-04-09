@@ -1,0 +1,124 @@
+version: '3.8'
+
+# ─── Secrets Docker Swarm ────────────────────────────────────
+# Créer les secrets avant le deploy :
+#   echo "Str0ngP@ssw0rd" | docker secret create db_password -
+#   echo "todo_user"       | docker secret create db_user -
+#   echo "todo_db"         | docker secret create db_name -
+#   echo "a1b2c3...32chars"| docker secret create jwt_secret -
+
+secrets:
+  db_password:
+    external: true
+  db_user:
+    external: true
+  db_name:
+    external: true
+  jwt_secret:
+    external: true
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/db_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB_FILE: /run/secrets/db_name
+    secrets:
+      - db_user
+      - db_password
+      - db_name
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - todo_backend_net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $(cat /run/secrets/db_user)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      placement:
+        constraints:
+          - node.role == manager # DB sur le manager pour la persistance volume
+
+  backend:
+    image: ${REGISTRY:-localhost}/todo-backend:${TAG:-latest}
+    environment:
+      FLASK_ENV: production
+      FLASK_APP: run.py
+      JWT_ACCESS_TOKEN_EXPIRES: ${JWT_ACCESS_TOKEN_EXPIRES:-3600}
+      JWT_REFRESH_TOKEN_EXPIRES: ${JWT_REFRESH_TOKEN_EXPIRES:-2592000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    secrets:
+      - db_user
+      - db_password
+      - db_name
+      - jwt_secret
+    # Le backend lit les secrets depuis /run/secrets/
+    # On injecte DATABASE_URL et JWT_SECRET_KEY via un entrypoint modifié (voir note ci-dessous)
+    networks:
+      - todo_backend_net
+      - todo_frontend_net
+    depends_on:
+      - db
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first # zero-downtime rolling update
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  frontend:
+    image: ${REGISTRY:-localhost}/todo-frontend:${TAG:-latest}
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-backend:5000}
+    ports:
+      - target: 80
+        published: ${FRONTEND_PORT:-80}
+        protocol: tcp
+        mode: host
+    networks:
+      - todo_frontend_net
+    depends_on:
+      - backend
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  todo_backend_net:
+    driver: overlay
+    internal: true # DB non accessible depuis l'extérieur
+  todo_frontend_net:
+    driver: overlay

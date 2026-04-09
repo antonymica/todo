@@ -1,0 +1,248 @@
+### Variables
+@baseUrl = http://localhost:5000/api
+@accessToken = 
+@refreshToken = 
+
+###############################################
+# HEALTH
+###############################################
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+###############################################
+# AUTH
+###############################################
+
+### Register
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "kobaxploit",
+  "email": "kobaxploit@example.com",
+  "password": "Test1234"
+}
+
+### Stocker les tokens après register (VS Code REST Client)
+@accessToken = {{register.response.body.access_token}}
+@refreshToken = {{register.response.body.refresh_token}}
+
+###
+
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "kobaxploit@example.com",
+  "password": "Test1234"
+}
+
+### Stocker les tokens après login
+@accessToken = {{login.response.body.access_token}}
+@refreshToken = {{login.response.body.refresh_token}}
+
+###
+
+### Me (profil courant)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Refresh token
+# @name refresh
+POST {{baseUrl}}/auth/refresh
+Authorization: Bearer {{refreshToken}}
+
+@accessToken = {{refresh.response.body.access_token}}
+
+###
+
+### Login — identifiants incorrects (doit retourner 401)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "kobaxploit@example.com",
+  "password": "WrongPassword"
+}
+
+###
+
+### Register — email dupliqué (doit retourner 409)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "kobaxploit",
+  "email": "kobaxploit@example.com",
+  "password": "Test1234"
+}
+
+###
+
+### Register — mot de passe faible (doit retourner 400)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "newuser",
+  "email": "newuser@example.com",
+  "password": "weak"
+}
+
+###
+
+### Me — sans token (doit retourner 401)
+GET {{baseUrl}}/auth/me
+
+
+###############################################
+# TODOS — CRUD
+###############################################
+
+### Créer un todo (priorité high)
+# @name createTodo1
+POST {{baseUrl}}/todos/
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Apprendre Flask",
+  "description": "Maîtriser Flask avec SQLAlchemy et JWT",
+  "priority": "high",
+  "due_date": "2025-12-31T23:59:59"
+}
+
+###
+
+### Créer un todo (priorité medium, sans due_date)
+POST {{baseUrl}}/todos/
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Faire du CTF",
+  "description": "Résoudre des challenges sur HackTheBox",
+  "priority": "medium"
+}
+
+###
+
+### Créer un todo (priorité low)
+POST {{baseUrl}}/todos/
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Lire de la documentation",
+  "priority": "low"
+}
+
+###
+
+### Lister tous les todos
+GET {{baseUrl}}/todos/
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Lister todos — filtre completed=false
+GET {{baseUrl}}/todos/?completed=false
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Lister todos — filtre priority=high
+GET {{baseUrl}}/todos/?priority=high
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Lister todos — filtre combiné
+GET {{baseUrl}}/todos/?completed=false&priority=medium
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Détail d'un todo (remplace 1 par un id réel)
+GET {{baseUrl}}/todos/1
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Modifier un todo — titre + description
+PATCH {{baseUrl}}/todos/1
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Apprendre Flask (mis à jour)",
+  "description": "Nouvelle description"
+}
+
+###
+
+### Modifier un todo — changer la priorité
+PATCH {{baseUrl}}/todos/1
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "priority": "low"
+}
+
+###
+
+### Modifier un todo — retirer la due_date
+PATCH {{baseUrl}}/todos/1
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "due_date": null
+}
+
+###
+
+### Toggle completed
+PATCH {{baseUrl}}/todos/1/toggle
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Supprimer un todo
+DELETE {{baseUrl}}/todos/1
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Accès à un todo inexistant (doit retourner 404)
+GET {{baseUrl}}/todos/99999
+Authorization: Bearer {{accessToken}}
+
+###
+
+### Créer todo sans token (doit retourner 401)
+POST {{baseUrl}}/todos/
+Content-Type: application/json
+
+{
+  "title": "Todo sans auth"
+}
+
+###
+
+### Créer todo sans titre (doit retourner 400)
+POST {{baseUrl}}/todos/
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "description": "Pas de titre"
+}

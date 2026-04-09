@@ -1,0 +1,198 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import 'tailwindcss';
+
+@plugin "daisyui/theme" {
+  name: 'cyber';
+  default: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(8% 0.04 260);
+  --color-base-200: oklch(11% 0.05 260);
+  --color-base-300: oklch(15% 0.06 260);
+  --color-base-content: oklch(90% 0.015 240);
+  --color-primary: oklch(74% 0.18 200);
+  --color-primary-content: oklch(10% 0.04 200);
+  --color-secondary: oklch(74% 0.2 155);
+  --color-secondary-content: oklch(10% 0.04 155);
+  --color-accent: oklch(65% 0.28 340);
+  --color-accent-content: oklch(98% 0 0);
+  --color-neutral: oklch(18% 0.05 260);
+  --color-neutral-content: oklch(65% 0.03 260);
+  --color-info: oklch(70% 0.14 220);
+  --color-success: oklch(70% 0.2 155);
+  --color-warning: oklch(78% 0.18 70);
+  --color-error: oklch(62% 0.24 25);
+
+  --radius-selector: 0.25rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --border: 1px;
+}
+
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark,
+    luxury;
+}
+
+@theme {
+  --font-sans: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: oklch(8% 0.04 260);
+  min-height: 100vh;
+}
+
+/* Cyber grid background */
+.cyber-grid {
+  background-image:
+    linear-gradient(oklch(15% 0.06 260 / 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(15% 0.06 260 / 0.4) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow:
+    0 0 20px oklch(74% 0.18 200 / 0.25),
+    0 0 40px oklch(74% 0.18 200 / 0.1);
+}
+.glow-secondary {
+  box-shadow:
+    0 0 20px oklch(74% 0.2 155 / 0.25),
+    0 0 40px oklch(74% 0.2 155 / 0.1);
+}
+.text-glow {
+  text-shadow: 0 0 20px currentColor;
+}
+
+/* Scan line animation */
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+.scanline::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(74% 0.18 200 / 0.3),
+    transparent
+  );
+  animation: scanline 6s linear infinite;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s ease forwards;
+}
+.delay-100 {
+  animation-delay: 0.1s;
+  opacity: 0;
+}
+.delay-200 {
+  animation-delay: 0.2s;
+  opacity: 0;
+}
+.delay-300 {
+  animation-delay: 0.3s;
+  opacity: 0;
+}
+
+/* Cyber card */
+.cyber-card {
+  background: oklch(11% 0.05 260);
+  border: 1px solid oklch(20% 0.06 260);
+  position: relative;
+  overflow: hidden;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.cyber-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(74% 0.18 200 / 0.6),
+    transparent
+  );
+}
+.cyber-card:hover {
+  border-color: oklch(74% 0.18 200 / 0.4);
+  box-shadow: 0 0 30px oklch(74% 0.18 200 / 0.08);
+}
+
+/* Input focus glow */
+.input:focus,
+.textarea:focus {
+  box-shadow: 0 0 0 2px oklch(74% 0.18 200 / 0.3);
+  outline: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: oklch(8% 0.04 260);
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(25% 0.06 260);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(74% 0.18 200 / 0.5);
+}
+
+/* Priority badges */
+.priority-high {
+  color: oklch(62% 0.24 25);
+  border-color: oklch(62% 0.24 25 / 0.3);
+  background: oklch(62% 0.24 25 / 0.1);
+}
+.priority-medium {
+  color: oklch(78% 0.18 70);
+  border-color: oklch(78% 0.18 70 / 0.3);
+  background: oklch(78% 0.18 70 / 0.1);
+}
+.priority-low {
+  color: oklch(70% 0.14 220);
+  border-color: oklch(70% 0.14 220 / 0.3);
+  background: oklch(70% 0.14 220 / 0.1);
+}

@@ -1,0 +1,38 @@
+# Environnement virtuel
+.venv/
+venv/
+env/
+
+# Variables d'environnement (secrets)
+.env
+.env.*
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Outils de dev
+.git/
+.gitignore
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Docs / tests
+*.md
+tests/
+api.http
+
+Dockerfile
+docker-compose.yml
+compose.*.yml
+compose.yml
+.dockerignore
