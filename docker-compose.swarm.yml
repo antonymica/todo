@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ─── Secrets Docker Swarm ────────────────────────────────────
 # Créer les secrets avant le deploy :
 #   echo "Str0ngP@ssw0rd" | docker secret create db_password -
