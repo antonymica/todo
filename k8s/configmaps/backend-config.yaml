@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: todo-app
+data:
+  FLASK_ENV: 'production'
+  FLASK_APP: 'run.py'
+  JWT_ACCESS_TOKEN_EXPIRES: '3600'
+  JWT_REFRESH_TOKEN_EXPIRES: '2592000'
+  CORS_ORIGINS: 'http://todo.antonymica.site'
