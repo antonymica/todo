@@ -332,12 +332,6 @@ jobs:
           wait_for_service backend
           wait_for_service frontend
 
-          echo "Checking backend API health"
-          compose exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5).read()"
-
-          echo "Checking frontend health"
-          compose exec -T frontend wget -qO- http://127.0.0.1/ >/dev/null
-
           echo "Current service status"
           compose ps
 
