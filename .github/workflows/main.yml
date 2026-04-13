@@ -115,13 +115,28 @@ jobs:
         run: |
           set -euo pipefail
 
+          wait_for_backend() {
+            echo "Waiting for backend..."
+            for i in {1..36}; do
+              if docker compose exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5).read()" >/dev/null 2>&1; then
+                echo "backend is ready"
+                return 0
+              fi
+              sleep 5
+            done
+
+            docker compose ps
+            docker compose logs --tail=120 db backend
+            return 1
+          }
+
           wait_for_url() {
             name="$1"
             url="$2"
 
             echo "Waiting for ${name}..."
             for i in {1..36}; do
-              if curl -fsS "$url" >/dev/null; then
+              if curl -fsS "$url" >/dev/null 2>&1; then
                 echo "${name} is ready"
                 return 0
               fi
@@ -133,8 +148,9 @@ jobs:
             return 1
           }
 
-          wait_for_url backend "http://127.0.0.1:${BACKEND_PORT}/api/health"
+          wait_for_backend
           wait_for_url frontend "http://127.0.0.1:${FRONTEND_PORT}"
+          wait_for_url api "http://127.0.0.1:${FRONTEND_PORT}/api/health"
 
       - name: Run OWASP ZAP baseline scan
         run: |
