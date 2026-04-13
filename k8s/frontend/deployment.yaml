@@ -5,12 +5,16 @@ metadata:
   namespace: todo-app
   labels:
     app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: web
     app.kubernetes.io/part-of: todo-app
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  minReadySeconds: 5
   selector:
     matchLabels:
-      app: frontend
+      app.kubernetes.io/name: frontend
+      app.kubernetes.io/component: web
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -19,34 +23,45 @@ spec:
   template:
     metadata:
       labels:
-        app: frontend
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: todo-app
     spec:
       containers:
         - name: frontend
-          image: ${REGISTRY}/todo-frontend:${TAG} # remplacer au deploy
+          image: ghcr.io/antonymica/todo-frontend:latest
+          imagePullPolicy: Always
           ports:
-            - containerPort: 80
+            - name: http
+              containerPort: 80
           envFrom:
             - configMapRef:
                 name: frontend-config
           resources:
             requests:
-              memory: '32Mi'
-              cpu: '50m'
+              cpu: 50m
+              memory: 64Mi
             limits:
-              memory: '64Mi'
-              cpu: '100m'
-          livenessProbe:
+              cpu: 250m
+              memory: 128Mi
+          startupProbe:
             httpGet:
               path: /
-              port: 80
-            initialDelaySeconds: 10
-            periodSeconds: 15
-            failureThreshold: 3
+              port: http
+            failureThreshold: 20
+            periodSeconds: 3
+            timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /
-              port: 80
-            initialDelaySeconds: 5
-            periodSeconds: 5
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
             failureThreshold: 3

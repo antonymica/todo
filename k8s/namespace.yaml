@@ -4,4 +4,6 @@ metadata:
   name: todo-app
   labels:
     app.kubernetes.io/name: todo-app
-    env: production
+    app.kubernetes.io/part-of: todo-app
+    app.kubernetes.io/managed-by: kubectl
+    environment: production

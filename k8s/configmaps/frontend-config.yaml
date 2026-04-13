@@ -7,5 +7,4 @@ metadata:
     app.kubernetes.io/name: frontend
     app.kubernetes.io/part-of: todo-app
 data:
-  # Nom DNS interne K8s : <service-name>.<namespace>.svc.cluster.local
-  API_UPSTREAM: 'backend-service.todo-app.svc.cluster.local:5000'
+  API_UPSTREAM: backend-service.todo-app.svc.cluster.local:5000

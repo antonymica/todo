@@ -8,9 +8,11 @@ metadata:
     app.kubernetes.io/part-of: todo-app
 spec:
   selector:
-    app: frontend
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: web
   ports:
-    - port: 80
-      targetPort: 80
+    - name: http
+      port: 80
+      targetPort: http
       protocol: TCP
-  type: ClusterIP # L'Ingress expose vers l'extérieur
+  type: ClusterIP

@@ -1,0 +1,109 @@
+name: Package Dev Images
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: package-dev-images
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  package:
+    name: Build, push and update manifests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve image names and tag
+        id: meta
+        run: |
+          set -euo pipefail
+
+          repo="${GITHUB_REPOSITORY,,}"
+          tag="$(git tag --points-at HEAD | sort -V | tail -n 1)"
+
+          if [ -z "$tag" ]; then
+            tag="latest"
+          fi
+
+          echo "image_tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "backend_image=${REGISTRY}/${repo}-backend:${tag}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${REGISTRY}/${repo}-frontend:${tag}" >> "$GITHUB_OUTPUT"
+
+          echo "Using image tag: ${tag}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.backend_image }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.frontend_image }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      - name: Update Kubernetes deployment images
+        env:
+          BACKEND_IMAGE: ${{ steps.meta.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ steps.meta.outputs.frontend_image }}
+        run: |
+          set -euo pipefail
+
+          sed -i "s|image: .*todo-backend:.*|image: ${BACKEND_IMAGE}|" k8s/backend/deployment.yaml
+          sed -i "s|image: .*todo-frontend:.*|image: ${FRONTEND_IMAGE}|" k8s/frontend/deployment.yaml
+
+          grep -n "image:" k8s/backend/deployment.yaml
+          grep -n "image:" k8s/frontend/deployment.yaml
+
+      - name: Commit manifest image update
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add k8s/backend/deployment.yaml k8s/frontend/deployment.yaml
+
+          if git diff --cached --quiet; then
+            echo "Kubernetes manifests already use the requested image tag."
+            exit 0
+          fi
+
+          git commit -m "chore(k8s): update dev image tag to ${{ steps.meta.outputs.image_tag }} [skip ci]"
+          git push origin HEAD:dev

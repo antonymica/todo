@@ -8,10 +8,11 @@ metadata:
     app.kubernetes.io/part-of: todo-app
 spec:
   selector:
-    app: postgres
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
   ports:
-    - port: 5432
+    - name: postgres
+      port: 5432
       targetPort: 5432
       protocol: TCP
-  # ClusterIP = accessible uniquement dans le cluster
   type: ClusterIP

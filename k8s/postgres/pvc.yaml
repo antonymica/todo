@@ -11,10 +11,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 2Gi
-  # Remplace par ta StorageClass selon le cloud provider :
-  # AWS  : gp3
-  # GCP  : standard-rwo
-  # Azure: managed-premium
-  # Local (minikube/kind) : standard
-  storageClassName: standard
+      storage: 5Gi

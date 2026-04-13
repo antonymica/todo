@@ -8,9 +8,11 @@ metadata:
     app.kubernetes.io/part-of: todo-app
 spec:
   selector:
-    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
   ports:
-    - port: 5000
-      targetPort: 5000
+    - name: http
+      port: 5000
+      targetPort: http
       protocol: TCP
   type: ClusterIP

@@ -1,28 +1,34 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
   namespace: todo-app
   labels:
     app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
     app.kubernetes.io/part-of: todo-app
 spec:
-  replicas: 1 # Postgres ne scale pas horizontalement sans PgBouncer/Patroni
+  serviceName: postgres-service
+  replicas: 1
   selector:
     matchLabels:
-      app: postgres
-  strategy:
-    type: Recreate # Recreate obligatoire avec ReadWriteOnce PVC
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/component: database
   template:
     metadata:
       labels:
-        app: postgres
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: todo-app
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: postgres
           image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 5432
+            - name: postgres
+              containerPort: 5432
           env:
             - name: POSTGRES_USER
               valueFrom:
@@ -46,34 +52,37 @@ spec:
               mountPath: /var/lib/postgresql/data
           resources:
             requests:
-              memory: '128Mi'
-              cpu: '100m'
+              cpu: 100m
+              memory: 128Mi
             limits:
-              memory: '512Mi'
-              cpu: '500m'
-          livenessProbe:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - $(POSTGRES_USER)
-                - -d
-                - $(POSTGRES_DB)
-            initialDelaySeconds: 30
-            periodSeconds: 10
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            failureThreshold: 30
+            periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 3
           readinessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - $(POSTGRES_USER)
-                - -d
-                - $(POSTGRES_DB)
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 20
+            timeoutSeconds: 5
             failureThreshold: 3
       volumes:
         - name: postgres-storage
