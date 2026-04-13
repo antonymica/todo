@@ -1,0 +1,345 @@
+name: Build, Security and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: todo-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  COMPOSE_PROJECT_NAME: todo_ci
+  POSTGRES_USER: todo_user
+  POSTGRES_PASSWORD: todo_ci_password
+  POSTGRES_DB: todo_db
+  JWT_SECRET_KEY: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+  FLASK_ENV: production
+  API_UPSTREAM: backend:5000
+  FRONTEND_PORT: '8080'
+  BACKEND_PORT: '5000'
+
+jobs:
+  quality:
+    name: Build and SonarQube
+    runs-on: ubuntu-latest
+
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Check SonarQube secrets
+        run: |
+          set -euo pipefail
+
+          for name in SONAR_TOKEN SONAR_HOST_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub secret: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Check backend syntax
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m compileall .
+
+      - name: Check Docker Compose config
+        run: docker compose config --quiet
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Run SonarQube analysis
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+      - name: Check SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+
+  dast:
+    name: OWASP ZAP DAST
+    runs-on: ubuntu-latest
+    needs:
+      - quality
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Start application
+        run: docker compose up -d --build
+
+      - name: Wait for application
+        run: |
+          set -euo pipefail
+
+          wait_for_url() {
+            name="$1"
+            url="$2"
+
+            echo "Waiting for ${name}..."
+            for i in {1..36}; do
+              if curl -fsS "$url" >/dev/null; then
+                echo "${name} is ready"
+                return 0
+              fi
+              sleep 5
+            done
+
+            docker compose ps
+            docker compose logs --tail=120
+            return 1
+          }
+
+          wait_for_url backend "http://127.0.0.1:${BACKEND_PORT}/api/health"
+          wait_for_url frontend "http://127.0.0.1:${FRONTEND_PORT}"
+
+      - name: Run OWASP ZAP baseline scan
+        run: |
+          set -euo pipefail
+
+          mkdir -p zap
+          docker run --rm --network host \
+            -v "${GITHUB_WORKSPACE}/zap:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t "http://127.0.0.1:${FRONTEND_PORT}" \
+            -r zap-report.html \
+            -w zap-report.md \
+            -I
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-dast-report
+          path: zap/
+          if-no-files-found: ignore
+
+      - name: Stop application
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs:
+      - quality
+      - dast
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      WORKDIR: ${{ secrets.WORKDIR }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check deployment secrets
+        run: |
+          set -euo pipefail
+
+          for name in SSH_HOST SSH_PORT SSH_USER SSH_PRIVATE_KEY WORKDIR; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub secret: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
+      - name: Trust deployment server
+        run: |
+          set -euo pipefail
+
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Check server environment file
+        run: |
+          set -euo pipefail
+
+          remote_workdir="$(printf '%q' "$WORKDIR")"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            mkdir -p $remote_workdir
+            if [ ! -f $remote_workdir/.env.prod ]; then
+              echo 'Missing .env.prod on the server. Create it once before deploying.'
+              exit 1
+            fi
+            chmod 600 $remote_workdir/.env.prod
+          "
+
+      - name: Sync source files
+        run: |
+          set -euo pipefail
+
+          rsync -az --delete --delete-delay \
+            -e "ssh -p $SSH_PORT" \
+            --exclude=".git/" \
+            --exclude=".github/" \
+            --exclude=".codex" \
+            --exclude="node_modules/" \
+            --exclude="frontend/node_modules/" \
+            --exclude="frontend/dist/" \
+            --exclude="backend/.venv/" \
+            --exclude="venv/" \
+            --exclude=".venv/" \
+            --exclude="__pycache__/" \
+            --exclude="*.pyc" \
+            --exclude=".pytest_cache/" \
+            --exclude=".env" \
+            --exclude=".env.*" \
+            --exclude="secrets/" \
+            --exclude="k8s/" \
+            ./ "$SSH_USER@$SSH_HOST:$WORKDIR/"
+
+      - name: Verify synced source tree
+        run: |
+          set -euo pipefail
+
+          remote_workdir="$(printf '%q' "$WORKDIR")"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            test -f $remote_workdir/docker-compose.yml
+            test -f $remote_workdir/backend/Dockerfile
+            test -f $remote_workdir/frontend/Dockerfile
+            test -f $remote_workdir/frontend/package-lock.json
+          "
+
+      - name: Build and restart Docker services
+        run: |
+          set -euo pipefail
+
+          remote_workdir="$(printf '%q' "$WORKDIR")"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "WORKDIR=$remote_workdir bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$WORKDIR"
+
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE="docker compose"
+          elif command -v docker-compose >/dev/null 2>&1; then
+            COMPOSE="docker-compose"
+          else
+            echo "Docker Compose is not installed on the server."
+            exit 1
+          fi
+
+          compose() {
+            $COMPOSE --env-file .env.prod "$@"
+          }
+
+          wait_for_service() {
+            service="$1"
+
+            echo "Waiting for ${service}..."
+            for i in {1..36}; do
+              container_id="$(compose ps -q "$service" 2>/dev/null || true)"
+              if [ -n "$container_id" ]; then
+                status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
+                if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                  echo "${service} is ${status}"
+                  return 0
+                fi
+                if [ "$status" = "unhealthy" ] || [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
+                  docker logs "$container_id" --tail=120 || true
+                  return 1
+                fi
+              fi
+              sleep 5
+            done
+
+            compose ps || true
+            if [ -n "${container_id:-}" ]; then
+              docker logs "$container_id" --tail=120 || true
+            fi
+            return 1
+          }
+
+          echo "Checking production compose config"
+          compose config --quiet
+
+          echo "Backing up database when possible"
+          mkdir -p ops/backups
+          db_container="$(compose ps -q db 2>/dev/null || true)"
+          if [ -n "$db_container" ] && [ "$(docker inspect -f '{{.State.Running}}' "$db_container" 2>/dev/null || echo false)" = "true" ]; then
+            backup_path="ops/backups/todo-$(date -u +%Y%m%dT%H%M%SZ).sql"
+            compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$backup_path"
+            echo "Database backup written to ${backup_path}"
+          else
+            echo "No running db container found, skipping backup"
+          fi
+
+          echo "Building and starting services"
+          compose pull db || true
+          compose build --pull
+          compose up -d --remove-orphans
+
+          wait_for_service db
+          wait_for_service backend
+          wait_for_service frontend
+
+          echo "Checking backend API health"
+          compose exec -T backend python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5).read()"
+
+          echo "Checking frontend health"
+          compose exec -T frontend wget -qO- http://127.0.0.1/ >/dev/null
+
+          echo "Current service status"
+          compose ps
+
+          echo "Pruning unused Docker images"
+          docker image prune -f
+          REMOTE

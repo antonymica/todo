@@ -105,6 +105,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 package-lock.json
+!frontend/package-lock.json
 
 # Vite cache
 .vite/

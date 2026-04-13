@@ -11,15 +11,36 @@ if [ -f /run/secrets/jwt_secret ];  then
   export JWT_SECRET_KEY=$(cat /run/secrets/jwt_secret)
 fi
 
-# Construire DATABASE_URL si pas déjà définie
+DB_HOST="${DB_HOST:-db}"
+DB_PORT="${DB_PORT:-5432}"
+
+# Construire DATABASE_URL avec des identifiants encodés pour supporter les
+# caractères spéciaux dans le mot de passe PostgreSQL.
 if [ -n "$DB_USER" ] && [ -n "$DB_PASS" ] && [ -n "$DB_NAME" ]; then
-  export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@db:5432/${DB_NAME}"
+  export DB_HOST DB_PORT DB_USER DB_PASS DB_NAME
+  DATABASE_URL=$(python -c 'import os; from urllib.parse import quote; print("postgresql://{}:{}@{}:{}/{}".format(quote(os.environ["DB_USER"], safe=""), quote(os.environ["DB_PASS"], safe=""), os.environ["DB_HOST"], os.environ["DB_PORT"], quote(os.environ["DB_NAME"], safe="")))')
+  export DATABASE_URL
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+  echo "❌ Configuration PostgreSQL manquante: DB_USER, DB_PASS, DB_NAME ou DATABASE_URL requis."
+  exit 1
 fi
 
 until python -c "
 import psycopg2, os, sys
 try:
-    psycopg2.connect(os.environ['DATABASE_URL'])
+    if all(os.environ.get(k) for k in ('DB_USER', 'DB_PASS', 'DB_NAME')):
+        conn = psycopg2.connect(
+            host=os.environ.get('DB_HOST', 'db'),
+            port=os.environ.get('DB_PORT', '5432'),
+            user=os.environ['DB_USER'],
+            password=os.environ['DB_PASS'],
+            dbname=os.environ['DB_NAME'],
+        )
+    else:
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    conn.close()
     sys.exit(0)
 except Exception:
     sys.exit(1)
