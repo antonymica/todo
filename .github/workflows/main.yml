@@ -141,6 +141,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p zap
+          chmod 777 zap
           docker run --rm --network host \
             -v "${GITHUB_WORKSPACE}/zap:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
