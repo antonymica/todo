@@ -1,359 +1,282 @@
 # TODO_SYS
 
-> Application de gestion de tâches full-stack avec authentification JWT — containerisée et prête pour la production.
+Application full-stack de gestion de tâches avec authentification JWT.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  React 19 + Vite  │  Flask 3  │  PostgreSQL 16  │  Nginx   │
-└─────────────────────────────────────────────────────────────┘
-```
+Stack principale :
 
----
-
-## Stack technique
-
-| Couche           | Technologie                                                  |
-| ---------------- | ------------------------------------------------------------ |
-| Frontend         | React 19, TypeScript, Vite, TailwindCSS v4, DaisyUI v5       |
-| Backend          | Flask 3, Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate |
-| Base de données  | PostgreSQL 16                                                |
-| Auth             | JWT (access token 1h + refresh token 30j)                    |
-| State management | Zustand avec persistence localStorage                        |
-| HTTP client      | Axios avec interceptors refresh automatique                  |
-| Reverse proxy    | Nginx 1.27 (runtime config via envsubst)                     |
-| Containerisation | Docker, Docker Compose, Docker Swarm                         |
-| Orchestration    | Kubernetes (manifests inclus)                                |
+- Frontend : React 19, TypeScript, Vite, TailwindCSS, DaisyUI
+- Backend : Flask 3, SQLAlchemy, Flask-Migrate, JWT
+- Base de données : PostgreSQL 16
+- Runtime : Docker Compose ou Kubernetes
+- Reverse proxy applicatif : Nginx dans l'image frontend
 
 ---
 
-## Structure du projet
+## Architecture
 
+```text
+Utilisateur
+   |
+   v
+Frontend Nginx
+   |-- sert l'application React
+   |-- proxy /api/* vers le backend Flask
+   |
+   v
+Backend Flask
+   |
+   v
+PostgreSQL
 ```
-project/
-├── frontend/                      # React + Vite + TypeScript
-│   ├── src/
-│   │   ├── components/            # TodoItem, TodoList, CreateTodoModal, UI
-│   │   ├── pages/                 # Login, Register, Dashboard
-│   │   ├── hooks/                 # useAuth, useTodos
-│   │   ├── services/              # api.ts, auth.service.ts, todo.service.ts
-│   │   ├── store/                 # authStore (Zustand)
-│   │   └── types/                 # Types TypeScript partagés
-│   ├── nginx.conf.template        # Config Nginx avec ${API_UPSTREAM}
-│   ├── docker-entrypoint.sh       # Injection runtime de l'URL API
-│   └── Dockerfile                 # Multi-stage build (node → nginx)
-│
-├── backend/                       # Flask REST API
+
+Avec Docker Compose, seul le frontend est exposé sur l'hôte. Le backend et PostgreSQL restent internes au réseau Docker.
+
+Avec Kubernetes, l'Ingress expose le service frontend. Le frontend proxy ensuite `/api/*` vers `backend-service`.
+
+---
+
+## Structure
+
+```text
+.
+├── backend/
 │   ├── app/
-│   │   ├── models/                # User, Todo (SQLAlchemy)
-│   │   ├── routes/                # auth.py, todos.py
-│   │   └── utils/                 # validators.py
-│   ├── migrations/                # Alembic (Flask-Migrate)
-│   ├── entrypoint.sh              # Wait-for-DB + migrations + start
-│   ├── config.py                  # Configuration par environnement
-│   └── Dockerfile                 # Multi-stage build (builder → runtime)
-│
-├── k8s/                           # Manifests Kubernetes
-│   ├── namespace.yaml
-│   ├── secrets/
-│   ├── configmaps/
-│   ├── postgres/
+│   ├── migrations/
+│   ├── Dockerfile
+│   └── entrypoint.sh
+├── frontend/
+│   ├── src/
+│   ├── Dockerfile
+│   ├── docker-entrypoint.sh
+│   └── nginx.conf.template
+├── k8s/
 │   ├── backend/
+│   ├── configmaps/
 │   ├── frontend/
-│   └── ingress.yaml
-│
-├── .env                           # Variables locales (non commité)
-├── .env.example                   # Template à copier
-├── docker-compose.yml             # Dev local
-└── docker-compose.swarm.yml       # Production Docker Swarm
+│   ├── postgres/
+│   ├── secrets/
+│   ├── ingress.yaml
+│   └── namespace.yaml
+├── docker-compose.yml
+├── .env.example
+└── REVERSE.md
 ```
 
 ---
 
 ## Prérequis
 
-- Docker >= 24 et Docker Compose v2
-- Node.js >= 22 (dev local frontend)
-- Python >= 3.11 (dev local backend)
-- `kubectl` (déploiement Kubernetes)
+Pour Docker Compose :
+
+- Docker 24+
+- Docker Compose v2
+
+Pour Kubernetes :
+
+- `kubectl`
+- un cluster local ou distant
+- un Ingress Controller Nginx si tu veux exposer l'application avec `Ingress`
+
+Pour le développement sans Docker :
+
+- Node.js 22+
+- Python 3.13 recommandé
 
 ---
 
-## Démarrage rapide
+## Variables d'environnement Docker Compose
 
-### 1. Cloner et configurer
+Copie le fichier exemple :
 
 ```bash
-git clone https://github.com/antonymica/todo.git
-cd todo
-
-# Copier et éditer les variables d'environnement
 cp .env.example .env
 ```
 
-Éditer `.env` avec tes valeurs :
+Exemple minimal :
 
 ```env
 POSTGRES_USER=todo_user
-POSTGRES_PASSWORD=Str0ngP@ssw0rd_2024!
+POSTGRES_PASSWORD=change_me_in_production
 POSTGRES_DB=todo_db
-JWT_SECRET_KEY=genere_avec_openssl_rand_hex_32
+
+FLASK_ENV=development
+JWT_SECRET_KEY=change_me_super_secret_key_min_32_chars
+JWT_ACCESS_TOKEN_EXPIRES=3600
+JWT_REFRESH_TOKEN_EXPIRES=2592000
+
 API_UPSTREAM=backend:5000
-FRONTEND_PORT=80
-BACKEND_PORT=5000
-DB_PORT=5432
+FRONTEND_PORT=8080
 ```
 
-### 2. Lancer avec Docker Compose
+Notes :
 
-```bash
-docker compose up --build
-```
-
-| Service    | URL                   |
-| ---------- | --------------------- |
-| Frontend   | http://localhost      |
-| API Flask  | http://localhost:5000 |
-| PostgreSQL | localhost:5432        |
+- `API_UPSTREAM=backend:5000` doit rester ainsi avec Docker Compose.
+- `FRONTEND_PORT` est le port exposé sur la machine hôte.
+- Le backend Flask n'est pas exposé directement par `docker-compose.yml`; il est accessible via `/api` depuis le frontend.
 
 ---
 
-## Développement local (sans Docker)
+## Lancer en local avec Docker Compose
 
-### Backend
-
-```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# Lancer PostgreSQL seul
-docker compose up db -d
-
-# Migrations
-flask db init
-flask db migrate -m "initial"
-flask db upgrade
-
-# Démarrer Flask
-python run.py
-```
-
-### Frontend
+Depuis la racine du projet :
 
 ```bash
-cd frontend
-npm install
-npm run dev     # http://localhost:5173
+cp .env.example .env
 ```
 
-> Le proxy Vite redirige `/api/*` vers `http://localhost:5000` automatiquement.
-
----
-
-## API REST
-
-### Authentification
-
-| Méthode | Endpoint             | Auth          | Description                |
-| ------- | -------------------- | ------------- | -------------------------- |
-| `POST`  | `/api/auth/register` | ❌            | Inscription                |
-| `POST`  | `/api/auth/login`    | ❌            | Connexion                  |
-| `POST`  | `/api/auth/refresh`  | Refresh token | Renouveler l'access token  |
-| `GET`   | `/api/auth/me`       | ✅            | Profil utilisateur courant |
-
-### Todos
-
-| Méthode  | Endpoint                | Auth | Description                                         |
-| -------- | ----------------------- | ---- | --------------------------------------------------- |
-| `GET`    | `/api/todos/`           | ✅   | Lister les todos (filtres: `completed`, `priority`) |
-| `POST`   | `/api/todos/`           | ✅   | Créer un todo                                       |
-| `GET`    | `/api/todos/:id`        | ✅   | Détail d'un todo                                    |
-| `PATCH`  | `/api/todos/:id`        | ✅   | Modifier un todo (partiel)                          |
-| `DELETE` | `/api/todos/:id`        | ✅   | Supprimer un todo                                   |
-| `PATCH`  | `/api/todos/:id/toggle` | ✅   | Basculer completed                                  |
-
-#### Exemple — Créer un todo
+Modifier `.env`, puis lancer :
 
 ```bash
-curl -X POST http://localhost:5000/api/todos/ \
-  -H "Authorization: Bearer <access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Apprendre Kubernetes",
-    "description": "Déployer todo-sys sur un cluster K8s",
-    "priority": "high",
-    "due_date": "2025-12-31T23:59:59"
-  }'
+docker compose up -d --build
 ```
 
-#### Filtres disponibles sur `GET /api/todos/`
+Vérifier les containers :
 
 ```bash
-# Todos non complétés
-GET /api/todos/?completed=false
-
-# Todos urgents
-GET /api/todos/?priority=high
-
-# Combiné
-GET /api/todos/?completed=false&priority=high
+docker compose ps
 ```
 
-#### Modèle Todo
-
-```json
-{
-  "id": 1,
-  "title": "Apprendre Kubernetes",
-  "description": "Déployer todo-sys sur un cluster K8s",
-  "completed": false,
-  "priority": "high",
-  "due_date": "2025-12-31T23:59:59",
-  "created_at": "2024-01-15T10:30:00",
-  "updated_at": "2024-01-15T10:30:00"
-}
-```
-
----
-
-## Tests API
-
-Un fichier REST Client est fourni pour tester tous les endpoints :
+Tester l'application :
 
 ```bash
-# Avec l'extension VS Code "REST Client"
-open backend/api.http
+curl -I http://127.0.0.1:8080
+curl http://127.0.0.1:8080/api/health
 ```
 
----
+URLs locales :
 
-## Variables d'environnement
+| Service          | URL                                |
+| ---------------- | ---------------------------------- |
+| Application      | `http://localhost:8080`            |
+| API via frontend | `http://localhost:8080/api`        |
+| Healthcheck API  | `http://localhost:8080/api/health` |
 
-### `.env` (racine)
-
-| Variable                    | Description                     | Défaut         |
-| --------------------------- | ------------------------------- | -------------- |
-| `POSTGRES_USER`             | Utilisateur PostgreSQL          | `todo_user`    |
-| `POSTGRES_PASSWORD`         | Mot de passe PostgreSQL         | —              |
-| `POSTGRES_DB`               | Nom de la base                  | `todo_db`      |
-| `JWT_SECRET_KEY`            | Clé secrète JWT (min. 32 chars) | —              |
-| `JWT_ACCESS_TOKEN_EXPIRES`  | Durée access token (secondes)   | `3600`         |
-| `JWT_REFRESH_TOKEN_EXPIRES` | Durée refresh token (secondes)  | `2592000`      |
-| `API_UPSTREAM`              | URL backend pour Nginx          | `backend:5000` |
-| `FRONTEND_PORT`             | Port exposé frontend            | `80`           |
-| `BACKEND_PORT`              | Port exposé backend             | `5000`         |
-| `DB_PORT`                   | Port exposé PostgreSQL          | `5432`         |
-
-### Flexibilité de `API_UPSTREAM`
-
-L'image frontend est buildée **une seule fois** — l'URL de l'API est injectée au démarrage du container :
+Commandes utiles :
 
 ```bash
-# Docker Compose local
-API_UPSTREAM=backend:5000
-
-# Kubernetes (DNS interne)
-API_UPSTREAM=backend-service.todo-app.svc.cluster.local:5000
-
-# Backend externe
-API_UPSTREAM=api.mondomaine.com:443
-
-# Run manuel
-docker run -p 80:80 -e API_UPSTREAM=mon-backend:5000 todo-frontend
-```
-
----
-
-## Docker
-
-### Build des images
-
-```bash
-# Backend
-docker build -t todo-backend:latest ./backend
-
-# Frontend
-docker build -t todo-frontend:latest ./frontend
-```
-
-### Docker Compose — commandes utiles
-
-```bash
-# Démarrer tout
-docker compose up --build
-
-# Logs d'un service
+docker compose logs -f
 docker compose logs -f backend
 docker compose logs -f frontend
+docker compose logs -f db
+```
 
-# Rebuild un seul service
-docker compose up --build backend
+Rebuild d'un service :
 
-# Arrêter et supprimer les volumes (reset DB)
+```bash
+docker compose up -d --build backend
+docker compose up -d --build frontend
+```
+
+Arrêter sans supprimer les données PostgreSQL :
+
+```bash
+docker compose down
+```
+
+Arrêter et supprimer aussi le volume PostgreSQL :
+
+```bash
 docker compose down -v
 ```
 
 ---
 
-## Docker Swarm
+## Lancer en production avec Docker Compose
 
-### Initialisation et déploiement
-
-```bash
-# 1. Initialiser le swarm
-docker swarm init
-
-# 2. Créer les secrets (stdin — rien n'est écrit sur le disque)
-echo "Str0ngP@ssw0rd_2024!"    | docker secret create db_password -
-echo "todo_user"                | docker secret create db_user -
-echo "todo_db"                  | docker secret create db_name -
-openssl rand -hex 32            | docker secret create jwt_secret -
-
-# 3. Builder et tagger les images
-docker build -t localhost/todo-backend:latest  ./backend
-docker build -t localhost/todo-frontend:latest ./frontend
-
-# 4. Déployer la stack
-REGISTRY=localhost TAG=latest \
-  docker stack deploy -c docker-compose.swarm.yml todo_app
-
-# 5. Vérifier l'état
-docker stack services todo_app
-```
-
-### Rolling update sans downtime
+Sur le serveur :
 
 ```bash
-docker service update \
-  --image localhost/todo-backend:v2 \
-  todo_app_backend
-
-# Rollback si problème
-docker service rollback todo_app_backend
+sudo apt update
+sudo apt install -y docker.io docker-compose-plugin
+sudo systemctl enable --now docker
 ```
+
+Cloner le projet :
+
+```bash
+sudo mkdir -p /opt/todo-auth
+sudo chown "$USER:$USER" /opt/todo-auth
+git clone https://github.com/antonymica/todo.git /opt/todo-auth
+cd /opt/todo-auth
+```
+
+Créer le fichier d'environnement production :
+
+```bash
+cp .env.example .env.prod
+```
+
+Exemple `.env.prod` :
+
+```env
+POSTGRES_USER=todo_user
+POSTGRES_PASSWORD=remplacer_par_un_mot_de_passe_solide
+POSTGRES_DB=todo_db
+
+FLASK_ENV=production
+JWT_SECRET_KEY=remplacer_par_une_cle_jwt_minimum_32_chars
+JWT_ACCESS_TOKEN_EXPIRES=3600
+JWT_REFRESH_TOKEN_EXPIRES=2592000
+
+API_UPSTREAM=backend:5000
+FRONTEND_PORT=8080
+```
+
+Sécuriser le fichier :
+
+```bash
+chmod 600 .env.prod
+```
+
+Démarrer l'application :
+
+```bash
+docker compose --env-file .env.prod up -d --build
+```
+
+Vérifier :
+
+```bash
+docker compose --env-file .env.prod ps
+curl http://127.0.0.1:8080/api/health
+```
+
+Mettre à jour en production :
+
+```bash
+cd /opt/todo-auth
+git pull
+docker compose --env-file .env.prod up -d --build --remove-orphans
+docker image prune -f
+```
+
+Pour exposer le domaine `todo.antonymica.site` avec Nginx sur le serveur, utiliser les commandes dans `REVERSE.md`.
 
 ---
 
-## Kubernetes
+## Kubernetes local
 
-### Prérequis cluster
+Exemple avec Minikube.
 
-- Nginx Ingress Controller installé
-- cert-manager installé (TLS Let's Encrypt)
-- StorageClass disponible (`standard` pour minikube/kind)
-
-### Déploiement
+### 1. Démarrer le cluster local
 
 ```bash
-# 1. Générer les valeurs base64 pour les secrets
-echo -n "todo_user"             | base64
-echo -n "Str0ngP@ssw0rd_2024!" | base64
-echo -n "todo_db"               | base64
-openssl rand -hex 32            | base64
+minikube start
+minikube addons enable ingress
+```
 
-# Mettre à jour k8s/secrets/*.yaml avec ces valeurs
+### 2. Builder les images dans le Docker de Minikube
 
-# 2. Appliquer les manifests dans l'ordre
+```bash
+eval "$(minikube docker-env)"
+
+docker build -t todo-backend:local ./backend
+docker build -t todo-frontend:local ./frontend
+```
+
+### 3. Appliquer les manifests
+
+```bash
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/secrets/
 kubectl apply -f k8s/configmaps/
@@ -361,128 +284,296 @@ kubectl apply -f k8s/postgres/
 kubectl apply -f k8s/backend/
 kubectl apply -f k8s/frontend/
 kubectl apply -f k8s/ingress.yaml
-
-# 3. Vérifier
-kubectl get all -n todo-app
-kubectl get ingress -n todo-app
 ```
 
-### Minikube (test local)
+### 4. Utiliser les images locales
+
+Les manifests utilisent par défaut les images GHCR. Pour Minikube, remplacer par les images locales :
 
 ```bash
-minikube start
-minikube addons enable ingress
-
-# Utiliser le daemon Docker de minikube
-eval $(minikube docker-env)
-docker build -t todo-backend:latest  ./backend
-docker build -t todo-frontend:latest ./frontend
-
-# Dans les Deployments, ajouter imagePullPolicy: Never
-kubectl apply -f k8s/
+kubectl -n todo-app set image deployment/backend backend=todo-backend:local
+kubectl -n todo-app set image deployment/frontend frontend=todo-frontend:local
 ```
 
-### Commandes utiles
+Empêcher Kubernetes de tirer ces images depuis un registry :
 
 ```bash
-# Logs backend en temps réel
-kubectl logs -n todo-app deployment/backend -f
+kubectl -n todo-app patch deployment backend \
+  --type=json \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]'
 
-# Shell dans un pod
-kubectl exec -it -n todo-app deployment/backend -- bash
-
-# Rolling update
-kubectl set image deployment/backend \
-  backend=monregistry/todo-backend:v2 -n todo-app
-
-# Rollback
-kubectl rollout undo deployment/backend -n todo-app
-
-# Scaling
-kubectl scale deployment/backend --replicas=3 -n todo-app
+kubectl -n todo-app patch deployment frontend \
+  --type=json \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]'
 ```
+
+### 5. Vérifier le déploiement
+
+```bash
+kubectl -n todo-app get pods
+kubectl -n todo-app get svc
+kubectl -n todo-app get ingress
+```
+
+Attendre les rollouts :
+
+```bash
+kubectl -n todo-app rollout status statefulset/postgres
+kubectl -n todo-app rollout status deployment/backend
+kubectl -n todo-app rollout status deployment/frontend
+```
+
+### 6. Accéder à l'application
+
+Option simple avec port-forward :
+
+```bash
+kubectl -n todo-app port-forward service/frontend-service 8080:80
+```
+
+Puis ouvrir :
+
+```bash
+curl -I http://127.0.0.1:8080
+curl http://127.0.0.1:8080/api/health
+```
+
+Option Ingress Minikube :
+
+```bash
+MINIKUBE_IP="$(minikube ip)"
+echo "$MINIKUBE_IP todo.antonymica.site" | sudo tee -a /etc/hosts
+curl -I http://todo.antonymica.site
+```
+
+---
+
+## Kubernetes production
+
+Les manifests de production sont dans `k8s/`.
+
+Images par défaut :
+
+```text
+ghcr.io/antonymica/todo-backend:latest
+ghcr.io/antonymica/todo-frontend:latest
+```
+
+La pipeline `.github/workflows/package.yml` met à jour ces images automatiquement sur la branche `dev` :
+
+- si le commit a un tag Git, elle utilise ce tag
+- sinon elle garde `latest`
+
+### 1. Préparer le namespace
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+```
+
+### 2. Créer les secrets production
+
+Recommandé : créer les secrets directement avec `kubectl`, plutôt que de commiter de vraies valeurs.
+
+```bash
+kubectl -n todo-app create secret generic db-secret \
+  --from-literal=POSTGRES_USER=todo_user \
+  --from-literal=POSTGRES_PASSWORD='remplacer_par_un_mot_de_passe_solide' \
+  --from-literal=POSTGRES_DB=todo_db \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+```bash
+kubectl -n todo-app create secret generic backend-secret \
+  --from-literal=JWT_SECRET_KEY="$(openssl rand -hex 32)" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Si les images GHCR sont privées, créer un secret de pull :
+
+```bash
+kubectl -n todo-app create secret docker-registry ghcr-pull-secret \
+  --docker-server=ghcr.io \
+  --docker-username="$GITHUB_USER" \
+  --docker-password="$GITHUB_TOKEN" \
+  --docker-email="$GITHUB_EMAIL"
+```
+
+Puis l'associer au service account par défaut :
+
+```bash
+kubectl -n todo-app patch serviceaccount default \
+  -p '{"imagePullSecrets":[{"name":"ghcr-pull-secret"}]}'
+```
+
+### 3. Appliquer la configuration
+
+```bash
+kubectl apply -f k8s/configmaps/
+```
+
+Adapter le domaine et CORS si besoin :
+
+```bash
+kubectl -n todo-app edit configmap backend-config
+kubectl -n todo-app edit ingress todo-ingress
+```
+
+### 4. Déployer PostgreSQL
+
+```bash
+kubectl apply -f k8s/postgres/
+kubectl -n todo-app rollout status statefulset/postgres
+```
+
+### 5. Déployer le backend et le frontend
+
+```bash
+kubectl apply -f k8s/backend/
+kubectl apply -f k8s/frontend/
+
+kubectl -n todo-app rollout status deployment/backend
+kubectl -n todo-app rollout status deployment/frontend
+```
+
+### 6. Déployer l'Ingress
+
+```bash
+kubectl apply -f k8s/ingress.yaml
+kubectl -n todo-app get ingress
+```
+
+Le manifest Ingress est en HTTP. Ajouter TLS ensuite avec cert-manager ou avec la solution de ton cluster.
+
+### 7. Utiliser une version d'image précise
+
+Si tu veux déployer une version taguée :
+
+```bash
+TAG=v1.0.0
+
+kubectl -n todo-app set image deployment/backend \
+  backend=ghcr.io/antonymica/todo-backend:$TAG
+
+kubectl -n todo-app set image deployment/frontend \
+  frontend=ghcr.io/antonymica/todo-frontend:$TAG
+
+kubectl -n todo-app rollout status deployment/backend
+kubectl -n todo-app rollout status deployment/frontend
+```
+
+Rollback :
+
+```bash
+kubectl -n todo-app rollout undo deployment/backend
+kubectl -n todo-app rollout undo deployment/frontend
+```
+
+---
+
+## Pipeline images Kubernetes
+
+La pipeline [.github/workflows/package.yml](.github/workflows/package.yml) s'active sur push vers `dev`.
+
+Elle fait :
+
+1. détecte le tag Git du commit courant
+2. utilise `latest` si aucun tag n'existe
+3. build l'image backend
+4. build l'image frontend
+5. push les images dans GitHub Container Registry
+6. met à jour les images dans les deployments Kubernetes
+7. commit les manifests modifiés sur `dev`
+
+Format des images :
+
+```text
+ghcr.io/antonymica/todo-backend:<tag-ou-latest>
+ghcr.io/antonymica/todo-frontend:<tag-ou-latest>
+```
+
+Pour créer un tag et déclencher une version :
+
+```bash
+git checkout dev
+git tag v1.0.0
+git push origin dev --tags
+```
+
+---
+
+## Commandes Kubernetes utiles
+
+```bash
+kubectl -n todo-app get all
+kubectl -n todo-app get pods -o wide
+kubectl -n todo-app describe pod <pod>
+```
+
+Logs :
+
+```bash
+kubectl -n todo-app logs -f deployment/backend
+kubectl -n todo-app logs -f deployment/frontend
+kubectl -n todo-app logs -f statefulset/postgres
+```
+
+Shell dans un pod :
+
+```bash
+kubectl -n todo-app exec -it deployment/backend -- sh
+kubectl -n todo-app exec -it deployment/frontend -- sh
+```
+
+Redémarrer un composant :
+
+```bash
+kubectl -n todo-app rollout restart deployment/backend
+kubectl -n todo-app rollout restart deployment/frontend
+```
+
+Supprimer l'application Kubernetes :
+
+```bash
+kubectl delete namespace todo-app
+```
+
+---
+
+## API
+
+Healthcheck :
+
+```bash
+GET /api/health
+```
+
+Auth :
+
+| Méthode | Endpoint             | Description         |
+| ------- | -------------------- | ------------------- |
+| `POST`  | `/api/auth/register` | Inscription         |
+| `POST`  | `/api/auth/login`    | Connexion           |
+| `POST`  | `/api/auth/refresh`  | Renouveler le token |
+| `GET`   | `/api/auth/me`       | Utilisateur courant |
+
+Todos :
+
+| Méthode  | Endpoint                | Description             |
+| -------- | ----------------------- | ----------------------- |
+| `GET`    | `/api/todos/`           | Lister les tâches       |
+| `POST`   | `/api/todos/`           | Créer une tâche         |
+| `GET`    | `/api/todos/:id`        | Détail d'une tâche      |
+| `PATCH`  | `/api/todos/:id`        | Modifier une tâche      |
+| `DELETE` | `/api/todos/:id`        | Supprimer une tâche     |
+| `PATCH`  | `/api/todos/:id/toggle` | Basculer l'état terminé |
 
 ---
 
 ## Sécurité
 
-### Mesures implémentées
-
-- Mots de passe hashés avec **bcrypt** (salt auto-généré)
-- **JWT** avec expiration courte (access 1h) + refresh long (30j)
-- Refresh token automatique côté client via interceptor Axios
-- **CORS** restreint aux origines autorisées
-- Utilisateur **non-root** dans les containers Docker
-- Secrets via **Docker Secrets** (Swarm) ou **Kubernetes Secrets**
-- Réseau `internal: true` pour PostgreSQL (non exposé en Swarm)
-- Headers de sécurité Nginx (`X-Frame-Options`, `X-Content-Type-Options`)
-- Validation des inputs côté backend (email, password, username)
-
-### Recommandations production
-
-```bash
-# Générer un JWT_SECRET_KEY solide
-openssl rand -hex 32
-
-# Ne jamais commiter
-echo ".env" >> .gitignore
-echo "secrets/" >> .gitignore
-
-# Rotation des secrets Kubernetes sans downtime
-kubectl create secret generic backend-secret \
-  --from-literal=JWT_SECRET_KEY=$(openssl rand -hex 32) \
-  -n todo-app --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deployment/backend -n todo-app
-```
-
----
-
-## Validation des données
-
-### Règles password
-
-- Minimum 8 caractères
-- Au moins 1 majuscule
-- Au moins 1 chiffre
-
-### Règles username
-
-- 3 à 50 caractères
-- Lettres, chiffres et underscores uniquement
-
-### Priorités Todo
-
-- `low` — faible priorité
-- `medium` — priorité normale (défaut)
-- `high` — priorité élevée
-
----
-
-## Contribuer
-
-```bash
-# Fork + clone
-git clone https://github.com/antonymica/todo.git
-
-# Créer une branche
-git checkout -b feature/ma-fonctionnalite
-
-# Développer, tester, commiter
-git commit -m "feat: description de la fonctionnalité"
-
-# Push + Pull Request
-git push origin feature/ma-fonctionnalite
-```
-
----
-
-## Licence
-
-MIT — voir [LICENSE](LICENSE)
-
----
-
-```
-// TODO_SYS — built with Flask + React + PostgreSQL
-// Containerized. Scalable. Production-ready.
-```
+- Les mots de passe utilisateurs sont hashés avec bcrypt.
+- Les tokens JWT ont une durée d'expiration configurable.
+- PostgreSQL n'est pas exposé publiquement.
+- Le backend n'est pas exposé directement avec Docker Compose.
+- Les secrets de production doivent être créés sur le serveur ou dans le cluster, pas commités avec de vraies valeurs.
+- Pour Kubernetes, préférer External Secrets, Sealed Secrets ou le secret manager du cloud en production.
