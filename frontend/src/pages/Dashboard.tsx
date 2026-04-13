@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTodos } from '@/hooks/useTodos';
 import { TodoList } from '@/components/TodoList';
 import { CreateTodoModal } from '@/components/CreateTodoModal';
+import { ThemeSelector } from '@/components/ThemeSelector';
 import type { Priority, Todo, TodoFilters } from '@/types';
 
 type FilterTab = 'all' | 'pending' | 'done';
@@ -41,10 +42,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen cyber-grid scanline">
-      {/* Ambient */}
-      <div className="fixed top-0 right-0 w-80 h-80 bg-primary/3 blur-3xl rounded-full pointer-events-none" />
-      <div className="fixed bottom-0 left-0 w-80 h-80 bg-secondary/3 blur-3xl rounded-full pointer-events-none" />
-
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-base-300 bg-base-100/80 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -59,13 +56,19 @@ export default function Dashboard() {
               <p className="font-bold text-sm leading-none">{user?.username}</p>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="btn btn-ghost btn-sm gap-2 font-mono text-xs text-base-content/40 hover:text-error"
-          >
-            <LogOut size={14} />
-            EXIT
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeSelector className="hidden sm:flex" />
+            <button
+              onClick={logout}
+              className="btn btn-ghost btn-sm gap-2 font-mono text-xs text-base-content/60 hover:text-error"
+            >
+              <LogOut size={14} />
+              EXIT
+            </button>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-4 pb-3 sm:hidden">
+          <ThemeSelector className="w-full justify-between" />
         </div>
       </header>
 

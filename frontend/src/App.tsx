@@ -1,20 +1,28 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import Dashboard from '@/pages/Dashboard';
+import { useThemeStore } from '@/store/themeStore';
 
 export default function App() {
+  const theme = useThemeStore((state) => state.theme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   return (
     <BrowserRouter>
       <Toaster
         position="top-right"
         toastOptions={{
           style: {
-            background: 'oklch(11% 0.05 260)',
-            border: '1px solid oklch(20% 0.06 260)',
-            color: 'oklch(90% 0.015 240)',
+            background: 'var(--color-base-200)',
+            border: '1px solid var(--color-base-300)',
+            color: 'var(--color-base-content)',
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: '13px',
           },

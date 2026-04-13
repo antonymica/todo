@@ -3,7 +3,7 @@
 
 @plugin "daisyui/theme" {
   name: 'cyber';
-  default: true;
+  default: false;
   color-scheme: dark;
 
   --color-base-100: oklch(8% 0.04 260);
@@ -32,7 +32,10 @@
 @plugin "daisyui" {
   themes:
     light --default,
-    dark --prefersdark,
+    emerald,
+    corporate,
+    cupcake,
+    dark,
     luxury;
 }
 
@@ -47,31 +50,38 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: oklch(8% 0.04 260);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
   min-height: 100vh;
 }
 
-/* Cyber grid background */
 .cyber-grid {
+  background-color: var(--color-base-100);
   background-image:
-    linear-gradient(oklch(15% 0.06 260 / 0.4) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(15% 0.06 260 / 0.4) 1px, transparent 1px);
+    linear-gradient(
+      color-mix(in oklab, var(--color-base-content) 8%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--color-base-content) 8%, transparent) 1px,
+      transparent 1px
+    );
   background-size: 40px 40px;
 }
 
-/* Glow effects */
 .glow-primary {
   box-shadow:
-    0 0 20px oklch(74% 0.18 200 / 0.25),
-    0 0 40px oklch(74% 0.18 200 / 0.1);
+    0 0 18px color-mix(in oklab, var(--color-primary) 28%, transparent),
+    0 0 34px color-mix(in oklab, var(--color-primary) 12%, transparent);
 }
 .glow-secondary {
   box-shadow:
-    0 0 20px oklch(74% 0.2 155 / 0.25),
-    0 0 40px oklch(74% 0.2 155 / 0.1);
+    0 0 18px color-mix(in oklab, var(--color-secondary) 28%, transparent),
+    0 0 34px color-mix(in oklab, var(--color-secondary) 12%, transparent);
 }
 .text-glow {
-  text-shadow: 0 0 20px currentColor;
+  text-shadow: 0 0 14px currentColor;
 }
 
 /* Scan line animation */
@@ -94,12 +104,20 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    oklch(74% 0.18 200 / 0.3),
+    color-mix(in oklab, var(--color-primary) 30%, transparent),
     transparent
   );
   animation: scanline 6s linear infinite;
+  opacity: 0.45;
   pointer-events: none;
   z-index: 9999;
+}
+
+[data-theme='light'] .scanline::after,
+[data-theme='emerald'] .scanline::after,
+[data-theme='corporate'] .scanline::after,
+[data-theme='cupcake'] .scanline::after {
+  opacity: 0.12;
 }
 
 /* Fade in animation */
@@ -129,10 +147,15 @@ body {
   opacity: 0;
 }
 
-/* Cyber card */
 .cyber-card {
-  background: oklch(11% 0.05 260);
-  border: 1px solid oklch(20% 0.06 260);
+  background: color-mix(
+    in oklab,
+    var(--color-base-100) 88%,
+    var(--color-base-content) 12%
+  );
+  border: 1px solid
+    color-mix(in oklab, var(--color-base-content) 14%, transparent);
+  color: var(--color-base-content);
   position: relative;
   overflow: hidden;
   transition:
@@ -149,35 +172,38 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    oklch(74% 0.18 200 / 0.6),
+    color-mix(in oklab, var(--color-primary) 55%, transparent),
     transparent
   );
 }
 .cyber-card:hover {
-  border-color: oklch(74% 0.18 200 / 0.4);
-  box-shadow: 0 0 30px oklch(74% 0.18 200 / 0.08);
+  border-color: color-mix(in oklab, var(--color-primary) 36%, transparent);
+  box-shadow: 0 0 24px color-mix(in oklab, var(--color-primary) 10%, transparent);
 }
 
-/* Input focus glow */
+.theme-selector {
+  backdrop-filter: blur(12px);
+}
+
 .input:focus,
 .textarea:focus {
-  box-shadow: 0 0 0 2px oklch(74% 0.18 200 / 0.3);
+  box-shadow: 0 0 0 2px
+    color-mix(in oklab, var(--color-primary) 24%, transparent);
   outline: none;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: oklch(8% 0.04 260);
+  background: var(--color-base-100);
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(25% 0.06 260);
+  background: color-mix(in oklab, var(--color-base-content) 20%, transparent);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(74% 0.18 200 / 0.5);
+  background: color-mix(in oklab, var(--color-primary) 45%, transparent);
 }
 
 /* Priority badges */

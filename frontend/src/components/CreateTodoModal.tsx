@@ -58,7 +58,7 @@ export const CreateTodoModal = ({ open, onClose, onCreate }: Props) => {
       />
 
       {/* Modal */}
-      <div className="relative cyber-card glow-primary rounded-xl w-full max-w-md p-6 animate-fadeInUp">
+      <div className="relative cyber-card glow-primary rounded-lg w-full max-w-md p-6 animate-fadeInUp">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>

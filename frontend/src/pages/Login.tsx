@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Lock, Terminal, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { CyberInput } from '@/components/ui/CyberInput';
+import { ThemeSelector } from '@/components/ThemeSelector';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -27,11 +28,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen cyber-grid scanline flex items-center justify-center p-4">
-      {/* Ambient glow */}
-      <div
-        className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full
-        bg-primary/5 blur-3xl pointer-events-none"
-      />
+      <ThemeSelector className="fixed right-3 top-3 z-20 shadow-sm" />
 
       <div className="w-full max-w-md animate-fadeInUp">
         {/* Logo */}
@@ -51,7 +48,7 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="cyber-card rounded-xl p-8 animate-fadeInUp delay-200">
+        <div className="cyber-card rounded-lg p-8 animate-fadeInUp delay-200">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <CyberInput
               label="Email"
