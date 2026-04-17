@@ -341,9 +341,9 @@ jobs:
           echo "Building and starting services"
           compose pull db || true
 
-		  echo "Stopping existing services"
+          echo "Stopping existing services"
           compose down --remove-orphans || true
-          
+
           compose build --pull
           compose up -d --remove-orphans
 
